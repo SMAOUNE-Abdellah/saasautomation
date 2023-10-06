@@ -1,0 +1,64 @@
+---
+- hosts: "{{ Ipaddresse }}"
+  remote_user: "{{ user }}"
+  become: yes
+  vars_files:
+    - vars/authentication.yml
+
+  tasks:
+  - name: Dispaly the JSON file and save the content in register variable
+    shell: cat "/home/services/{{ servicename }}/clients/{{ clientname }}/{{ clientname }}.json"
+    register: result
+
+  - name: Read the content of the JSON file
+    set_fact:
+      jsoncontent: "{{ result.stdout | from_json }}"
+
+  - name: Create the backup files for the clinet
+    command: docker run --rm --volumes-from "{{ item.container_name }}" -v "/home/services/{{ servicename }}/clients/{{ clientname }}/backup/":/backup busybox tar cvf /backup/"{{ item.container_name }}".tar "{{ item.backup_path }}"
+    with_items: "{{ jsoncontent}}"
+
+  - name: Copy the backup files from worker to controller
+    fetch:
+      src: "/home/services/{{ servicename }}/clients/{{ clientname }}/backup/{{ item.container_name }}.tar"
+      dest: /home/backup/
+      flat: yes  
+     with_items: "{{ jsoncontent}}"  
+
+- hosts: BackupServer
+  remote_user: "{{ user }}"
+  become: yes
+  vars_files:
+    - vars/authentication.yml
+
+  - name: Create directory in the backup server named with current date
+    command: mkdir "/home/services/{{ servicename }}/clients/{{ clientname }}/backup/$(date -I)" 
+  
+  - name: Copy the backup files from the controller to the backup server
+    copy:
+      src: /home/backup/
+      dest: "/home/services/{{ servicename }}/clients/{{ clientname }}/backup/$(date -I)/" 
+
+  - name: Delete the files from the controller
+    local_action:
+    command: rm -rf /home/backup/*
+
+  
+ 
+ 
+ hosts: ServerB
+ tasks:
+ - name: Transfer file from ServerA to ServerB
+   synchronize:
+     src: /path/on/server_a
+     dest: /path/on/server_b
+   delegate_to: ServerA
+
+
+/var/lib/docker/volumes/salsbolume/_data
+
+Create a tar volume ( a backup file)
+docker run --rm --volumes-from  "container name that you want to backup its data" -v d:/volumebackup:/backup ubuntu tar /backup/backup.tar /"pathi nside the container that you want to back up it"
+docker run --rm --volumes-from webserver -v $(pwd):/backup busybox tar cvf /backup/backup.tar /var/www/html/
+
+Incremental backup: using software Duplicati
