@@ -1,0 +1,88 @@
+---
+- hosts: worker
+  remote_user: "{{ user }}"
+  become: yes
+  vars_files:
+    - vars/authentication.yml
+  tasks:
+  - name: Create a directory in the worker
+    file:
+      path: "/home/{{ user }}/jsondirectory"
+      state: directory
+
+  - name: Copy the json file from the controller to the worker
+    copy:
+      src: /var/www/html/php/jsondir/data.json
+      dest: "/home/{{ user }}/jsondirectory/data.json"
+
+  - name: Dispaly the JSON file and save the content in register variable
+    shell: cat "/home/{{ user }}/jsondirectory/data.json"
+    register: result
+
+  - name: Read the content of the JSON file from the register variable
+    set_fact:
+      jsoncontent: "{{ result.stdout | from_json }}"
+
+  - name: Log into the private registry
+    docker_login:
+      registry_url: "{{ jsoncontent.services.url }}"
+      username: "{{ jsoncontent.services.username }}"
+      password: "{{ jsoncontent.services.password }}"
+      reauthorize: yes
+
+  - name: Pull the images which compose the service
+    command: docker pull "{{ item.url_image }}"
+    with_items: "{{ jsoncontent.services.images }}"
+
+  - name: create directory
+    file:
+      path: "/home/services/{{ servicename }}/"
+      state: directory
+
+  - name: create directory
+    file:
+      path: "/home/services/{{ servicename }}/clients/"
+      state: directory
+
+  - name: Copy the json file wich contains the images name
+    copy:
+      src: /var/www/html/php/jsondir/images_name.json
+      dest: "/home/services/{{ servicename }}/images_name.json"
+
+  - name: Dispaly the JSON file and save the content in register variable
+    shell: cat "/home/services/{{ servicename }}/images_name.json"
+    register: images
+
+  - name: Read the content of the JSON file from the register variable
+    set_fact:
+      imagesname: "{{ images.stdout | from_json }}"
+
+  - name: Create directories useful for image options and instance options
+    file:
+      path: "/home/services/{{ servicename }}/{{ item[0] }}/{{ item[1] }}"
+      state: directory
+    with_nested: 
+      - "{{ imagesname }}"
+      -  ['directory', 'sql_directory', 'instances']
+
+  - name: Copy the files for options of the each image
+    copy:
+      src: "/var/www/html/services/{{ servicename }}/{{ item }}/directory/"
+      dest: "/home/services/{{ servicename }}/{{ item }}/directory/"
+    with_items:
+      - "{{ imagesname }}"
+
+- hosts: BackupServer
+  remote_user: "{{ user }}"
+  become: yes
+  vars_files:
+    - vars/authentication.yml
+  
+  tasks:
+  - name: Create directories specific to a service in the backup server
+    file: 
+      path: "/home/services/{{ item[0] }}/{{ item[1] }}"
+      state: directory
+    with_nested:
+      - "{{ servicename }}"
+      - "clients"
