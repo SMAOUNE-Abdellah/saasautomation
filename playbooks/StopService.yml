@@ -1,0 +1,12 @@
+---
+- hosts: "{{ IPaddresse }}"
+  remote_user: "{{ user }}"
+  become: yes
+  vars_files:
+    - vars/authentication.yml
+
+  tasks:
+  - name: Stop the service of the client
+    shell: docker-compose down
+    args:
+      chdir: "/home/services/{{ servicename }}/clients/{{ clientname }}/"
