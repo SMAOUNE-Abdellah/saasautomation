@@ -1,0 +1,59 @@
+version: '2.2'
+services:
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    container_name: nginx-proxy
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - conf:/etc/nginx/conf.d
+      - vhost:/etc/nginx/vhost.d
+      - dhparam:/etc/nginx/dhparam
+      - certs:/etc/nginx/certs:ro
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - html:/usr/share/nginx/html
+    networks:
+      - proxy-network
+    
+  letsencrypt:
+    image: nginxproxy/acme-companion
+    container_name: letsencrypt
+    restart: always
+    volumes_from:
+      - nginx-proxy
+    volumes:
+      - certs:/etc/nginx/certs:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  conf:
+  vhost:
+  dhparam:
+  certs:
+  html:
+
+networks:
+  proxy-network:
+    external:
+      name: nginx-proxy
+
+
+docker run -d \
+    --name site-web \
+    --net nginx-proxy \
+    -e 'LETSENCRYPT_EMAIL=abdellahsmaoune@gmail.com' \
+    -e 'LETSENCRYPT_HOST=website.example.com' \
+    -e 'VIRTUAL_HOST=website.example.com' phpmyadmin/phpmyadmin
+
+
+    #VIRTUAL_HOST contrôle le proxying par nginx-proxy et LETSENCRYPT_HOST contrôle 
+    #la création de certificats et l'activation SSL par acme-companion
+
+
+docker run -d \
+    --name site-web \
+    --net nginx-proxy \
+    -e 'LETSENCRYPT_HOST=websitetest.example.com' \
+    -e 'VIRTUAL_HOST=websitetest.example.com' phpmyadmin/phpmyadmin
