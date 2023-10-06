@@ -1,0 +1,115 @@
+---
+- hosts: "{{ Ipaddresse }}"
+  remote_user: "{{ username }}"
+  become: yes
+  vars_files:
+    - vars/authentication.yml
+
+  tasks:
+  - name: Update CentOS
+    command: yum update
+
+  - name: Create a user
+    user:
+      name: "{{ user }}"
+      state: present
+      groups: wheel
+      append: yes
+      password: "{{ mypassword | password_hash('sha512')  }}"
+
+  - name: Add user to the sudoers
+    copy:
+      dest: '/etc/sudoers.d/"{{ user }}"'
+      content: '"{{ user }}" ALL=(ALL) NOPASSWD: ALL'
+
+  - name: Copy the ssh-key
+    authorized_key: 
+      user: "{{ user }}" 
+      key: "{{ lookup('file', '/home/devasc/.ssh/id_rsa.pub') }}"
+      state: present
+
+  - name: Installing docker Prerequisite packages
+    yum:
+      name: "{{ item }}" 
+      state: latest
+    with_items:
+      - yum-utils
+      - device-mapper-persistent-data
+      - lvm2
+      - ca-certificates
+      - epel-release
+      - python-pip 
+      - python-setuptools
+      
+  - name: Configuring docker-ce repo
+    get_url:
+      url: https://download.docker.com/linux/centos/docker-ce.repo
+      dest: /etc/yum.repos.d/docker-ce.repo
+      mode: 0644
+
+  - name: Installing docker latest version
+    yum:
+      name: docker-ce
+      state: present
+
+  - name: Add user to the docker group 
+    user:
+      name: "{{ user }}"
+      group: docker
+      append: yes 
+
+  - name: Update docker-compose to bleeding edge 
+    get_url:
+      url: https://github.com/docker/compose/releases/download/1.26.0-rc4/docker-compose-Linux-x86_64
+      dest: /usr/local/bin/docker-compose
+      checksum: sha256:3ad2031c7daae160b8987538a60261475b3e17dfccf6fb96c1ae67d23afecdb8
+      mode: u+x,g+x
+
+  - name: Run a command to move the files in order to run docker-compose files remotly 
+    command: mv /usr/local/bin/docker-compose /usr/bin/docker-compose
+
+  - name: Start docker
+    service:
+      name: docker
+      state: started
+      enabled: true
+
+  - name: Intall docker SDK (module used by ansible to manage docker)
+    command: pip install docker
+
+  - name: Create a network for reverse-proxy
+    command: docker network create nginx-proxy
+
+  - name: Create /home/reverse-proxy directory
+    file:
+      path: /home/reverse-proxy/
+      state: directory
+  
+  - name: Copy the docker-compose file 
+    template:
+      src: ./reverse-proxy/docker-compose.yml
+      dest: /home/reverse-proxy/docker-compose.yml
+      mode: u+x
+
+  - name: Run docker-compose to set up the nginx reverse proxy
+    shell: docker-compose up -d
+    args:
+      chdir: /home/reverse-proxy/
+
+
+  
+- name: Run command
+    shell: npm install
+    args:
+      chdir: /var/www/html/saasautomation/
+
+  - name: Run command
+    shell: npm run serve
+    args:
+      chdir: /var/www/html/saasautomation/
+
+    
+     
+  
+
+
